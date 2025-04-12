@@ -1,31 +1,55 @@
 from flask import Flask, request, jsonify
+import requests
 from flask_cors import CORS
-import os
 
 app = Flask(__name__)
-CORS(app)  # permite receber chamadas de fora
+CORS(app)
 
-@app.route("/", methods=["GET"])
-def health_check():
-    return "OK"
+# 🔑 SUA CHAVE DO OPENROUTER
+OPENROUTER_API_KEY = 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
 
+# 🔁 Função que envia a pergunta para a IA (OpenRouter com GPT-3.5 Turbo)
+def enviar_para_ia(pergunta):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "openai/gpt-3.5-turbo",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Você é um coach vocal experiente. Ajude o usuário com estudo de canto, "
+                    "exercícios práticos, análise vocal e suporte emocional com respostas claras, educativas e personalizadas."
+                )
+            },
+            {"role": "user", "content": pergunta}
+        ]
+    }
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Erro ao conectar com a IA: {str(e)}"
+
+# 🧠 Endpoint principal da IA
 @app.route("/responder", methods=["POST"])
 def responder():
     data = request.get_json()
     pergunta = data.get("pergunta", "")
-    resposta = gerar_feedback_vocal(pergunta)
-    return jsonify({"resposta": resposta})
+    
+    if not pergunta:
+        return jsonify({"resposta": "Pergunta vazia!"}), 400
 
-def gerar_feedback_vocal(pergunta):
-    if "agudo" in pergunta.lower():
-        return "Sua afinação nos agudos pode melhorar. Experimente escalas mais lentas com apoio no diafragma."
-    elif "respiração" in pergunta.lower():
-        return "Seu controle respiratório precisa de treino. Faça exercícios com apneia e apoio."
-    elif "voz fraca" in pergunta.lower():
-        return "Você precisa de mais projeção. Use exercícios com sons sustentados, como 'M' e 'N'."
-    else:
-        return "Muito bom! Continue praticando sua afinação e presença vocal. Estou aqui para ajudar!"
+    resposta_ia = enviar_para_ia(pergunta)
+    return jsonify({"resposta": resposta_ia})
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # fallback local
-    app.run(host='0.0.0.0', port=port)
+# ✅ Teste básico
+@app.route("/", methods=["GET"])
+def home():
+    return "ok"
+
+
